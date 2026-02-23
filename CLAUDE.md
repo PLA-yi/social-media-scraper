@@ -62,7 +62,7 @@ Social media_01/
 | `GET` | `/api/logs` | SSE 实时日志流（爬虫日志） |
 | `GET` | `/api/data/files` | 列出 `data/` 下所有子文件夹，含 `meta`（`has_all_comments`） |
 | `POST` | `/api/data/clean-empty` | 删除 `data/` 下所有无文件的空白文件夹 |
-| `POST` | `/api/chat` | AI 数据分析，返回 **SSE 流式输出**（`provider`, `api_key`, `folder_path`, `prompt`） |
+| `POST` | `/api/chat` | AI 数据分析，返回 **SSE 流式输出**（`provider`, `api_key`, `folder_paths[]`, `prompt`） |
 
 `/api/scrape` 的 `mode` 取值：
 - `douyin`/`tiktok`：`keyword` 或 `blogger`
