@@ -330,11 +330,6 @@ async def run_scraper(platform, target, mode, count):
                 return
 
             import inspect
-            # Run the actual scraping loop based on whether it is async or sync
-            # while STILL inside the platform_env context!
-            import builtins
-            builtins.print("DEBUG SCRAPER:", type(scraper), dir(scraper))
-
             if inspect.iscoroutinefunction(scraper.run) or inspect.iscoroutinefunction(getattr(scraper.__class__, 'run', None)):
                 await scraper.run()
             else:

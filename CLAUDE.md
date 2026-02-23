@@ -92,8 +92,6 @@ Social media_01/
 
 添加新平台时无需修改调度逻辑，只需确保 `run()` 方法签名正确即可。
 
-> **注意**：`server.py:326` 存在一行遗留的调试输出 `builtins.print("DEBUG SCRAPER:", ...)`，后续应清理。
-
 ### 3. 同步爬虫的异步安全日志（`_log` 线程安全桥接）
 
 同步爬虫（Reddit、YouTube）运行在线程池中，无法直接 `await`。其 `_log()` 使用如下模式将日志转发到 async 的 `log_queue`：
