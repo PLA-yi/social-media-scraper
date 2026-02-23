@@ -1,5 +1,7 @@
 # Social Media Scraper Dashboard
 
+[中文版](./README.zh-CN.md)
+
 A unified web dashboard for scraping **Douyin, TikTok, Reddit, X (Twitter), and YouTube** — built with FastAPI + Vue 3. All five scrapers are controlled from a single browser interface with real-time log streaming and an AI-powered comment analysis panel.
 
 ---
