@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>爬虫控制面板</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f5f5f7;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: rgba(156, 163, 175, 0.5);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8 h-screen text-gray-800 antialiased">
+    <div id="app" class="max-w-7xl mx-auto h-full flex flex-col gap-4">
+
+        <!-- Navigation Header -->
+        <header class="flex items-center justify-between px-2">
+            <div class="flex items-center gap-6">
+                <h1 class="text-2xl font-bold tracking-tight text-gray-900">爬虫控制面板</h1>
+                <nav class="flex items-center gap-1 bg-white/60 rounded-xl p-1 shadow-sm border border-gray-100">
+                    <button
+                        @click="currentPage = 'scraper'"
+                        :class="currentPage === 'scraper'
+                            ? 'bg-white text-blue-600 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'"
+                        class="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all">
+                        爬虫控制
+                    </button>
+                    <button
+                        @click="switchToChat"
+                        :class="currentPage === 'chat'
+                            ? 'bg-white text-purple-600 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'"
+                        class="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all">
+                        AI 数据分析
+                    </button>
+                </nav>
+            </div>
+            <span class="text-sm font-medium px-3 py-1 bg-blue-100 text-blue-700 rounded-full">系统运行中</span>
+        </header>
+
+        <!-- Page 1: Scraper Control -->
+        <div v-show="currentPage === 'scraper'" class="grid grid-cols-1 md:grid-cols-12 gap-6 flex-1 min-h-0">
+            <!-- Left panel: Controls -->
+            <div class="md:col-span-4 lg:col-span-3 glass-card p-6 rounded-2xl shadow-sm flex flex-col gap-5 overflow-y-auto w-full">
+                <!-- Data Inputs Section -->
+                <div class="flex flex-col gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">平台</label>
+                        <select v-model="form.platform" class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm">
+                            <option value="douyin">抖音</option>
+                            <option value="tiktok">TikTok</option>
+                            <option value="reddit">Reddit</option>
+                            <option value="x">X (推特)</option>
+                            <option value="youtube">YouTube</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">模式</label>
+                        <select v-model="form.mode" class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm">
+                            <option value="keyword">关键词搜索</option>
+                            <option value="blogger">博主 / 用户主页</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">采集目标</label>
+                        <input v-model="form.target" type="text" placeholder="输入关键词或用户名" class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">采集数量</label>
+                        <input v-model.number="form.count" type="number" min="1" placeholder="默认 20" class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm">
+                    </div>
+                </div>
+
+                <button @click="startScrape" class="w-full bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-700 active:bg-blue-800 transition-colors font-semibold shadow-md mt-2 flex justify-center items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
+                    </svg>
+                    开始采集
+                </button>
+
+                <div class="mt-auto pt-6 border-t border-gray-200">
+                    <div class="flex items-center gap-2 mb-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 text-amber-500">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3Z" />
+                        </svg>
+                        <h2 class="text-base font-semibold text-gray-900">需要人工介入？</h2>
+                    </div>
+                    <p class="text-xs text-gray-500 mb-4 leading-relaxed">如果爬虫因验证码或登录暂停，请在弹出的浏览器窗口中完成操作，然后点击下方的继续执行按钮。</p>
+                    <button @click="resumeScrape" class="w-full bg-emerald-500 text-white py-3 rounded-xl hover:bg-emerald-600 active:bg-emerald-700 transition-colors font-semibold shadow-md">
+                        继续执行 / 验证码已完成
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right panel: Logs (now expanded to fill full width) -->
+            <div class="md:col-span-8 lg:col-span-9 bg-[#1e1e1e] text-green-400 p-5 rounded-2xl shadow-md font-mono text-sm flex flex-col relative overflow-hidden ring-1 ring-white/10">
+                <div class="flex items-center justify-between mb-4 pb-3 border-b border-gray-700/60">
+                    <div class="flex items-center gap-3">
+                        <div class="flex gap-1.5">
+                            <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                        </div>
+                        <h2 class="text-gray-300 font-semibold tracking-wide text-xs uppercase">运行日志 (Terminal)</h2>
+                    </div>
+                </div>
+                <div class="overflow-y-auto flex-1 flex flex-col gap-1.5 pr-2" id="log-container">
+                    <div v-for="(log, idx) in logs" :key="idx" class="break-words leading-relaxed pl-1">
+                        <span class="text-gray-500 mr-2">></span>{{ log }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Page 2: AI Chat (ChatGPT-style layout) -->
+        <div v-show="currentPage === 'chat'" class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
+
+            <!-- Left sidebar: Config -->
+            <div class="lg:col-span-3 glass-card p-5 rounded-2xl shadow-sm flex flex-col gap-4 overflow-y-auto">
+                <div class="flex items-center gap-2 mb-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 text-purple-500">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
+                    </svg>
+                    <h2 class="text-base font-semibold text-gray-900">分析配置</h2>
+                </div>
+
+                <div class="flex flex-col gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">AI 服务商</label>
+                        <select v-model="chatConfig.provider" class="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all shadow-sm">
+                            <option value="moonshot">Kimi (Moonshot)</option>
+                            <option value="zhipu">智谱 (ChatGLM)</option>
+                            <option value="minimax">Minimax</option>
+                            <option value="openrouter">OpenRouter</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">API Key</label>
+                        <input type="password" v-model="chatConfig.apiKey" placeholder="输入对应的 API Key" class="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all shadow-sm">
+                    </div>
+
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider">数据文件夹</label>
+                            <span class="text-xs text-gray-400">{{ chatConfig.folders.length }}/10 已选</span>
+                        </div>
+
+                        <!-- Dropdown trigger -->
+                        <button @click="showFolderDropdown = !showFolderDropdown"
+                            class="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-left flex items-center justify-between outline-none focus:ring-2 focus:ring-purple-500 transition-all shadow-sm">
+                            <span :class="chatConfig.folders.length ? 'text-gray-700' : 'text-gray-400'">
+                                {{ chatConfig.folders.length ? `已选 ${chatConfig.folders.length} 个文件夹` : '-- 点击选择数据文件夹 --' }}
+                            </span>
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"
+                                class="w-4 h-4 text-gray-400 transition-transform" :class="showFolderDropdown ? 'rotate-180' : ''">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                            </svg>
+                        </button>
+
+                        <!-- Dropdown panel -->
+                        <div v-if="showFolderDropdown"
+                            class="mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-20 relative">
+                            <div class="max-h-48 overflow-y-auto">
+                                <label v-for="f in dataFiles" :key="f"
+                                    class="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-purple-50 transition-colors"
+                                    :class="{'opacity-40 cursor-not-allowed': chatConfig.folders.length >= 10 && !chatConfig.folders.includes(f)}">
+                                    <input type="checkbox"
+                                        :checked="chatConfig.folders.includes(f)"
+                                        :disabled="chatConfig.folders.length >= 10 && !chatConfig.folders.includes(f)"
+                                        @change="toggleFolder(f)"
+                                        class="w-3.5 h-3.5 rounded accent-purple-600 flex-shrink-0">
+                                    <span class="text-xs" :class="folderMeta[f]?.has_all_comments ? 'text-green-600' : 'text-amber-500'">
+                                        {{ folderMeta[f]?.has_all_comments ? '✓' : '✗' }}
+                                    </span>
+                                    <span class="text-xs text-gray-700 truncate">{{ f }}</span>
+                                </label>
+                                <p v-if="!dataFiles.length" class="text-xs text-gray-400 text-center py-3">暂无数据文件夹</p>
+                            </div>
+                            <div class="border-t border-gray-100 px-3 py-2 flex justify-between items-center">
+                                <span class="text-xs text-gray-400">最多选 10 个</span>
+                                <button @click="showFolderDropdown = false"
+                                    class="text-xs font-medium text-purple-600 hover:text-purple-800">确认</button>
+                            </div>
+                        </div>
+
+                        <!-- Selected folder chips -->
+                        <div v-if="chatConfig.folders.length" class="flex flex-wrap gap-1.5 mt-2">
+                            <span v-for="f in chatConfig.folders" :key="f"
+                                class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg border"
+                                :class="folderMeta[f]?.has_all_comments
+                                    ? 'bg-purple-50 border-purple-200 text-purple-700'
+                                    : 'bg-amber-50 border-amber-200 text-amber-700'">
+                                <span class="truncate max-w-[100px]">{{ f }}</span>
+                                <button @click="removeFolder(f)" class="flex-shrink-0 hover:text-red-500 transition-colors">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-3 h-3">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </span>
+                        </div>
+
+                        <!-- Warning for folders missing all_comments.json -->
+                        <div v-if="foldersWithoutComments.length > 0"
+                            class="mt-2 flex items-start gap-2 rounded-lg px-3 py-2 text-xs bg-amber-50 border border-amber-200 text-amber-700">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5 flex-shrink-0 mt-0.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                            </svg>
+                            <span>{{ foldersWithoutComments.length }} 个文件夹缺少 <strong>all_comments.json</strong></span>
+                        </div>
+
+                        <button @click="loadDataFiles" class="mt-2 w-full text-xs text-purple-600 hover:text-purple-800 font-medium py-1.5 px-3 rounded-lg border border-purple-100 hover:bg-purple-50 transition-colors">
+                            刷新文件列表
+                        </button>
+                    </div>
+                </div>
+
+                <!-- System info -->
+                <div class="mt-auto pt-4 border-t border-gray-100">
+                    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">当前分析来源</p>
+                    <div class="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                        <template v-if="chatConfig.folders.length">
+                            <div v-for="f in chatConfig.folders" :key="f" class="flex items-center gap-1.5 mb-1 last:mb-0">
+                                <span :class="folderMeta[f]?.has_all_comments ? 'text-green-500' : 'text-amber-500'" class="text-xs">●</span>
+                                <span class="text-xs text-gray-500 truncate">{{ f }}/</span>
+                                <span class="text-xs font-semibold text-purple-600 flex-shrink-0">all_comments.json</span>
+                            </div>
+                        </template>
+                        <p v-else class="text-xs text-gray-400 italic">尚未选择数据文件夹</p>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-3 leading-relaxed">AI 将读取所选文件夹内的 <strong>all_comments.json</strong> 进行分析，最多可同时分析 10 个数据集。</p>
+
+                    <!-- Clean empty folders -->
+                    <div class="mt-4 pt-4 border-t border-gray-100">
+                        <button
+                            @click="cleanEmptyFolders"
+                            :disabled="isCleaning"
+                            class="w-full flex items-center justify-center gap-2 text-xs text-red-500 hover:text-red-700 font-medium py-2 px-3 rounded-lg border border-red-100 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                            <svg v-if="!isCleaning" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                            </svg>
+                            <svg v-else class="animate-spin w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            {{ isCleaning ? '清理中...' : '清理空白文件夹' }}
+                        </button>
+                        <p v-if="cleanResult" :class="cleanResult.count > 0 ? 'text-green-600' : 'text-gray-400'" class="text-xs mt-2 text-center">
+                            {{ cleanResult.count > 0 ? `已删除 ${cleanResult.count} 个空白文件夹` : '没有空白文件夹' }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right panel: Chat area -->
+            <div class="lg:col-span-9 flex flex-col gap-0 rounded-2xl shadow-sm overflow-hidden bg-white border border-gray-100">
+                <!-- Chat header -->
+                <div class="px-6 py-4 border-b border-gray-100 flex items-center gap-3 bg-white">
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center flex-shrink-0">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="white" class="w-4 h-4">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.59 14.37a6 6 0 0 1-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 0 0 6.16-12.12A14.98 14.98 0 0 0 9.631 8.41m5.96 5.96a14.926 14.926 0 0 1-5.841 2.58m-.119-8.54a6 6 0 0 0-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 0 0-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 0 1-2.448-2.448 14.9 14.9 0 0 1 .06-.312m-2.24 2.39a4.493 4.493 0 0 0-1.757 4.306 4.438 4.438 0 0 0 2.94-2.312m1.562-4.11v4.8" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-900">AI 数据分析助手</h3>
+                        <p class="text-xs text-gray-400">
+                            {{ chatConfig.folder ? chatConfig.folder : '请在左侧选择数据文件夹' }}
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Messages area -->
+                <div class="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-4 bg-gray-50/50 min-h-0" id="chat-container">
+                    <div v-if="chatMessages.length === 0" class="flex flex-col items-center justify-center h-full text-center gap-3 py-16">
+                        <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-100 to-blue-100 flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8 text-purple-400">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 0 1-.825-.242m9.345-8.334a2.126 2.126 0 0 0-.476-.095 48.64 48.64 0 0 0-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0 0 11.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" />
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium text-gray-600">向 AI 提问关于您抓取的数据</p>
+                            <p class="text-xs text-gray-400 mt-1">可以询问内容摘要、情感分析、热门话题等</p>
+                        </div>
+                    </div>
+
+                    <template v-for="(msg, idx) in chatMessages" :key="idx">
+                        <!-- User message -->
+                        <div v-if="msg.role === 'user'" class="flex justify-end">
+                            <div class="max-w-[70%] bg-blue-600 text-white px-4 py-2.5 rounded-2xl rounded-br-sm shadow-sm">
+                                <p class="text-sm leading-relaxed whitespace-pre-wrap">{{ msg.content }}</p>
+                            </div>
+                        </div>
+                        <!-- AI message -->
+                        <div v-else class="flex justify-start gap-3">
+                            <div class="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="white" class="w-3.5 h-3.5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
+                                </svg>
+                            </div>
+                            <div class="max-w-[70%] bg-white border border-gray-100 text-gray-800 px-4 py-2.5 rounded-2xl rounded-bl-sm shadow-sm">
+                                <p class="text-sm leading-relaxed whitespace-pre-wrap">{{ msg.content }}</p>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- Typing indicator -->
+                    <div v-if="isChatting" class="flex justify-start gap-3">
+                        <div class="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center flex-shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="white" class="w-3.5 h-3.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
+                            </svg>
+                        </div>
+                        <div class="bg-white border border-gray-100 px-4 py-3 rounded-2xl rounded-bl-sm shadow-sm flex items-center gap-1.5">
+                            <svg class="animate-spin h-3 w-3 text-purple-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span class="text-xs text-gray-400 italic">分析中...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Input area -->
+                <div class="px-4 py-3 border-t border-gray-100 bg-white">
+                    <div class="flex items-end gap-3 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2 focus-within:ring-2 focus-within:ring-purple-500 focus-within:border-transparent transition-all">
+                        <textarea
+                            v-model="currentPrompt"
+                            @keydown.enter.exact.prevent="sendChatMessage"
+                            placeholder="提出关于数据的问题… (Enter 发送，Shift+Enter 换行)"
+                            class="flex-1 bg-transparent text-sm outline-none resize-none max-h-32 leading-relaxed py-1"
+                            rows="1"
+                            :disabled="isChatting"
+                            @input="autoResize"
+                            ref="chatInput"
+                        ></textarea>
+                        <button
+                            @click="sendChatMessage"
+                            :disabled="isChatting || !currentPrompt.trim()"
+                            class="flex-shrink-0 p-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed mb-0.5">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
+                                <path d="M3.105 2.288a.75.75 0 0 0-.826.95l1.414 4.926A1.5 1.5 0 0 0 5.135 9.25h6.115a.75.75 0 0 1 0 1.5H5.135a1.5 1.5 0 0 0-1.442 1.086l-1.414 4.926a.75.75 0 0 0 .826.95 28.897 28.897 0 0 0 15.293-7.155.75.75 0 0 0 0-1.114A28.897 28.897 0 0 0 3.105 2.288Z" />
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-1.5 text-center">AI 分析基于您选择的数据文件，结果仅供参考</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, onMounted, nextTick } = Vue;
+
+        createApp({
+            setup() {
+                const currentPage = ref('scraper');
+                const logs = ref([]);
+                const form = ref({
+                    platform: 'douyin',
+                    mode: 'keyword',
+                    target: '',
+                    count: 20
+                });
+
+                // AI Chat State
+                const dataFiles = ref([]);
+                const chatConfig = reactive({
+                    provider: 'moonshot',
+                    apiKey: '',
+                    folders: []   // multi-select, max 10
+                });
+                const showFolderDropdown = ref(false);
+                const chatMessages = ref([]);
+                const isChatting = ref(false);
+                const currentPrompt = ref('');
+                const chatInput = ref(null);
+                const isCleaning = ref(false);
+                const cleanResult = ref(null);
+                const folderMeta = ref({});  // { folderName: { has_all_comments: bool } }
+
+                const loadDataFiles = async () => {
+                    try {
+                        const res = await fetch('/api/data/files');
+                        const data = await res.json();
+                        if (data.files) {
+                            dataFiles.value = data.files;
+                        }
+                        if (data.meta) {
+                            folderMeta.value = data.meta;
+                        }
+                    } catch (e) {
+                        console.error('Failed to load data files', e);
+                    }
+                };
+
+                const { computed } = Vue;
+
+                // Folders selected but missing all_comments.json
+                const foldersWithoutComments = computed(() =>
+                    chatConfig.folders.filter(f => !folderMeta.value[f]?.has_all_comments)
+                );
+
+                const toggleFolder = (f) => {
+                    const idx = chatConfig.folders.indexOf(f);
+                    if (idx === -1) {
+                        if (chatConfig.folders.length < 10) chatConfig.folders.push(f);
+                    } else {
+                        chatConfig.folders.splice(idx, 1);
+                    }
+                };
+
+                const removeFolder = (f) => {
+                    const idx = chatConfig.folders.indexOf(f);
+                    if (idx !== -1) chatConfig.folders.splice(idx, 1);
+                };
+
+                const switchToChat = async () => {
+                    currentPage.value = 'chat';
+                    await loadDataFiles();
+                };
+
+                const cleanEmptyFolders = async () => {
+                    isCleaning.value = true;
+                    cleanResult.value = null;
+                    try {
+                        const res = await fetch('/api/data/clean-empty', { method: 'POST' });
+                        const data = await res.json();
+                        cleanResult.value = data;
+                        // Remove deleted folders from selection
+                        if (data.deleted) {
+                            chatConfig.folders = chatConfig.folders.filter(f => !data.deleted.includes(f));
+                        }
+                        await loadDataFiles();
+                    } catch (e) {
+                        cleanResult.value = { count: 0, error: e.message };
+                    } finally {
+                        isCleaning.value = false;
+                    }
+                };
+
+                const autoResize = (e) => {
+                    const el = e.target;
+                    el.style.height = 'auto';
+                    el.style.height = Math.min(el.scrollHeight, 128) + 'px';
+                };
+
+                const sendChatMessage = async () => {
+                    if (!currentPrompt.value.trim() || isChatting.value) return;
+                    if (!chatConfig.apiKey) {
+                        alert('请输入 API Key');
+                        return;
+                    }
+                    if (chatConfig.folders.length === 0) {
+                        alert('请至少选择一个数据文件夹');
+                        return;
+                    }
+                    if (foldersWithoutComments.value.length > 0) {
+                        alert(`以下文件夹缺少 all_comments.json，请移除后再发送：\n${foldersWithoutComments.value.join('\n')}`);
+                        return;
+                    }
+
+                    const promptText = currentPrompt.value;
+                    currentPrompt.value = '';
+
+                    // Reset textarea height
+                    if (chatInput.value) {
+                        chatInput.value.style.height = 'auto';
+                    }
+
+                    chatMessages.value.push({ role: 'user', content: promptText });
+                    // Pre-insert empty AI bubble that will be filled token by token
+                    chatMessages.value.push({ role: 'ai', content: '' });
+                    const aiIdx = chatMessages.value.length - 1;
+                    isChatting.value = true;
+
+                    const scrollToBottom = () => nextTick(() => {
+                        const container = document.getElementById('chat-container');
+                        if (container) container.scrollTop = container.scrollHeight;
+                    });
+                    scrollToBottom();
+
+                    try {
+                        const res = await fetch('/api/chat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                provider: chatConfig.provider,
+                                api_key: chatConfig.apiKey,
+                                folder_paths: chatConfig.folders,
+                                prompt: promptText
+                            })
+                        });
+
+                        // Validation errors still return JSON
+                        const contentType = res.headers.get('content-type') || '';
+                        if (contentType.includes('application/json')) {
+                            const data = await res.json();
+                            chatMessages.value[aiIdx].content = `Error: ${data.error}`;
+                        } else {
+                            // Stream tokens
+                            const reader = res.body.getReader();
+                            const decoder = new TextDecoder();
+                            let buf = '';
+                            while (true) {
+                                const { done, value } = await reader.read();
+                                if (done) break;
+                                buf += decoder.decode(value, { stream: true });
+                                const parts = buf.split('\n');
+                                buf = parts.pop();
+                                for (const line of parts) {
+                                    if (!line.startsWith('data:')) continue;
+                                    const raw = line.slice(5).trim();
+                                    try {
+                                        const evt = JSON.parse(raw);
+                                        if (evt.type === 'delta') {
+                                            chatMessages.value[aiIdx].content += evt.content;
+                                            scrollToBottom();
+                                        } else if (evt.type === 'error') {
+                                            chatMessages.value[aiIdx].content = `Error: ${evt.message}`;
+                                        }
+                                    } catch (_) {}
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        chatMessages.value[aiIdx].content = `Error: ${e.message}`;
+                    } finally {
+                        isChatting.value = false;
+                        scrollToBottom();
+                    }
+                };
+
+                const startScrape = async () => {
+                    await fetch('/api/scrape', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(form.value)
+                    });
+                };
+
+                const resumeScrape = async () => {
+                    await fetch('/api/resume', { method: 'POST' });
+                };
+
+                onMounted(() => {
+                    loadDataFiles();
+
+                    const evtSource = new EventSource("/api/logs");
+                    evtSource.onmessage = function(event) {
+                        const data = JSON.parse(event.data);
+                        logs.value.push(data.message);
+                        nextTick(() => {
+                            const container = document.getElementById("log-container");
+                            if (container) {
+                                container.scrollTop = container.scrollHeight;
+                            }
+                        });
+                    };
+                    evtSource.onerror = function() {
+                        console.error('SSE 连接发生错误');
+                    };
+                });
+
+                return {
+                    currentPage,
+                    logs,
+                    form,
+                    dataFiles,
+                    folderMeta,
+                    foldersWithoutComments,
+                    chatConfig,
+                    showFolderDropdown,
+                    chatMessages,
+                    isChatting,
+                    currentPrompt,
+                    chatInput,
+                    isCleaning,
+                    cleanResult,
+                    loadDataFiles,
+                    switchToChat,
+                    toggleFolder,
+                    removeFolder,
+                    autoResize,
+                    sendChatMessage,
+                    startScrape,
+                    resumeScrape,
+                    cleanEmptyFolders
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

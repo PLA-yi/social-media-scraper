@@ -1,0 +1,38 @@
+# Scraped data and credentials (never commit)
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Logs & temp files
+*.log
+logs.txt
+uvicorn.log
+server_log.txt
+curl.pid
+
+# Patch / debug files
+*.patch
+fix.py
+test_*.py
+test_bug*.py
+test_imp.py
+test_thread.py
+
+# Claude Code internal
+.claude/
