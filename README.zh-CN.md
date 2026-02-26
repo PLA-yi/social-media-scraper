@@ -154,6 +154,12 @@ douyin/ tiktok/ reddit/ x/ youtube/   # 各平台爬虫
 
 ---
 
+## 相关项目
+
+- **[Social Media Scraper Skills](https://github.com/PLA-yi/Social-Media-Scraper-Skills)** — 本项目的 AI Agent Skills（每个平台一个文件夹，包含 `prompt.md` + `run.py`）
+
+---
+
 ## 开源协议
 
 本项目采用 [Apache License 2.0](./LICENSE)。

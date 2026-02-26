@@ -34,5 +34,7 @@ test_bug*.py
 test_imp.py
 test_thread.py
 
-# Claude Code internal
+# Claude Code internal (local settings stay private, commands are shared)
 .claude/
+!.claude/commands/
+!.claude/commands/*.md

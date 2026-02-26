@@ -152,6 +152,12 @@ Key design patterns:
 
 ---
 
+## Related
+
+- **[Social Media Scraper Skills](https://github.com/PLA-yi/Social-Media-Scraper-Skills)** — AI Agent skills for this project (one folder per platform, `prompt.md` + `run.py`)
+
+---
+
 ## License
 
 [Apache License 2.0](./LICENSE)
