@@ -18,6 +18,32 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 log_queue = asyncio.Queue()
 resume_event = asyncio.Event()
 
+
+class ScrapeCancelled(Exception):
+    """Raised when user requests scrape cancellation."""
+    pass
+
+
+class ScrapeControl:
+    IDLE    = "idle"
+    RUNNING = "running"
+    PAUSED  = "paused"
+    STOPPED = "stopped"
+
+    def __init__(self):
+        self.state = self.IDLE
+        self.pause_event = asyncio.Event()   # set=running, clear=paused
+        self.stop_event  = asyncio.Event()   # set=stop requested
+        self.pause_event.set()               # default: not paused
+
+    def reset(self):
+        self.state = self.RUNNING
+        self.pause_event.set()
+        self.stop_event.clear()
+
+
+scrape_control = ScrapeControl()
+
 # Set up global python path configuration before we start importing models dynamically
 base_dir = os.path.dirname(os.path.abspath(__file__))
 if base_dir not in sys.path:
@@ -83,6 +109,10 @@ class ScrapeRequest(BaseModel):
     target: str
     mode: str
     count: int = 20
+    download_videos: bool = False
+    sort_by: str = "1"
+    time_filter: int = 0
+    scrape_mode: str = "safe"  # "safe" | "fast"
 
 class ChatRequest(BaseModel):
     provider: str
@@ -93,6 +123,7 @@ class ChatRequest(BaseModel):
 class ServerAdapter:
     def __init__(self):
         self.user_continue_event = resume_event
+        self.control = scrape_control
 
     async def _log(self, msg: str):
         # Forward to SSE logs
@@ -110,7 +141,10 @@ async def root():
 
 @app.post("/api/scrape")
 async def start_scrape(req: ScrapeRequest):
-    asyncio.create_task(run_scraper(req.platform, req.target, req.mode, req.count))
+    asyncio.create_task(run_scraper(
+        req.platform, req.target, req.mode, req.count,
+        req.download_videos, req.sort_by, req.time_filter, req.scrape_mode
+    ))
     return {"status": "started", "platform": req.platform, "target": req.target, "mode": req.mode, "count": req.count}
 
 @app.post("/api/resume")
@@ -118,6 +152,32 @@ async def resume_scrape():
     resume_event.set()
     await log_queue.put({"message": "Resume signal received from UI"})
     return {"status": "resumed"}
+
+@app.post("/api/pause")
+async def pause_scrape():
+    if scrape_control.state == ScrapeControl.RUNNING:
+        scrape_control.state = ScrapeControl.PAUSED
+        scrape_control.pause_event.clear()
+        await log_queue.put({"type": "SCRAPE_PAUSED", "message": "[控制] 采集已暂停，等待恢复..."})
+        return {"status": "paused"}
+    elif scrape_control.state == ScrapeControl.PAUSED:
+        scrape_control.state = ScrapeControl.RUNNING
+        scrape_control.pause_event.set()
+        await log_queue.put({"type": "SCRAPE_RESUMED", "message": "[控制] 采集已恢复"})
+        return {"status": "resumed"}
+    return {"status": scrape_control.state}
+
+@app.post("/api/stop")
+async def stop_scrape():
+    scrape_control.stop_event.set()
+    scrape_control.pause_event.set()  # unblock any paused wait
+    scrape_control.state = ScrapeControl.STOPPED
+    await log_queue.put({"type": "SCRAPE_STOPPING", "message": "[控制] 正在停止采集..."})
+    return {"status": "stopping"}
+
+@app.get("/api/status")
+async def get_status():
+    return {"state": scrape_control.state}
 
 @app.get("/api/data/files")
 async def get_data_files():
@@ -278,28 +338,37 @@ async def chat_with_data(req: ChatRequest):
 
     return StreamingResponse(stream_ai(), media_type="text/event-stream")
 
-async def run_scraper(platform, target, mode, count):
+async def run_scraper(platform, target, mode, count, download_videos=False, sort_by="1", time_filter=0, scrape_mode="safe"):
     adapter = ServerAdapter()
-    await adapter._log(f"Starting scraper for {platform} - target: {target}, mode: {mode}, count: {count}")
+
+    # Reset control state for new scrape
+    scrape_control.reset()
+    await log_queue.put({"type": "SCRAPE_STARTED", "message": f"Starting scraper for {platform} - target: {target}, mode: {mode}, count: {count}, scrape_mode: {scrape_mode}"})
 
     try:
         scraper = None
         with platform_env(platform):
             if platform == "douyin":
-                if mode == "keyword":
+                if mode == "keyword" and scrape_mode == "fast":
+                    from douyin.scraper.keyword_fast import KeywordScraperFast
+                    scraper = KeywordScraperFast(keyword=target, count=count, download_videos=download_videos, server=adapter, sort_by=sort_by, time_filter=time_filter)
+                elif mode == "keyword":
                     from douyin.scraper.keyword import KeywordScraper
-                    scraper = KeywordScraper(keyword=target, count=count, download_videos=False, server=adapter)
+                    scraper = KeywordScraper(keyword=target, count=count, download_videos=download_videos, server=adapter, sort_by=sort_by, time_filter=time_filter)
                 else:
                     from douyin.scraper.blogger import BloggerScraper
-                    scraper = BloggerScraper(url_input=target, sort_mode="hot", count=count, download_videos=False, server=adapter)
+                    scraper = BloggerScraper(url_input=target, sort_mode="hot", count=count, download_videos=download_videos, server=adapter)
 
             elif platform == "tiktok":
-                if mode == "keyword":
+                if mode == "keyword" and scrape_mode == "fast":
+                    from tiktok.scraper.keyword_fast import KeywordScraperFast
+                    scraper = KeywordScraperFast(keyword=target, count=count, download_videos=download_videos, server=adapter, sort_by=sort_by, time_filter=time_filter)
+                elif mode == "keyword":
                     from tiktok.scraper.keyword import KeywordScraper
-                    scraper = KeywordScraper(keyword=target, count=count, download_videos=False, server=adapter)
+                    scraper = KeywordScraper(keyword=target, count=count, download_videos=download_videos, server=adapter, sort_by=sort_by, time_filter=time_filter)
                 else:
                     from tiktok.scraper.blogger import BloggerScraper
-                    scraper = BloggerScraper(url_input=target, sort_mode="hot", count=count, download_videos=False, server=adapter)
+                    scraper = BloggerScraper(url_input=target, sort_mode="hot", count=count, download_videos=download_videos, server=adapter)
 
             elif platform == "reddit":
                 if mode == "keyword":
@@ -312,10 +381,10 @@ async def run_scraper(platform, target, mode, count):
             elif platform == "youtube":
                 if mode == "keyword":
                     from youtube.scraper.keyword import KeywordScraper
-                    scraper = KeywordScraper(keyword=target, count=count, download_videos=False, server=adapter)
+                    scraper = KeywordScraper(keyword=target, count=count, download_videos=download_videos, server=adapter)
                 else:
                     from youtube.scraper.channel import ChannelScraper
-                    scraper = ChannelScraper(channel_input=target, sort_mode="viewCount", count=count, download_videos=False, server=adapter)
+                    scraper = ChannelScraper(channel_input=target, sort_mode="viewCount", count=count, download_videos=download_videos, server=adapter)
 
             elif platform == "x":
                 if mode == "keyword":
@@ -327,6 +396,7 @@ async def run_scraper(platform, target, mode, count):
 
             else:
                 await adapter._log(f"Platform {platform} not supported yet.")
+                scrape_control.state = ScrapeControl.IDLE
                 return
 
             import inspect
@@ -335,11 +405,16 @@ async def run_scraper(platform, target, mode, count):
             else:
                 await asyncio.get_event_loop().run_in_executor(None, scraper.run)
 
-        await adapter._log(f"[{platform}] Scraping complete!")
+        scrape_control.state = ScrapeControl.IDLE
+        await log_queue.put({"type": "SCRAPE_DONE", "message": f"[{platform}] Scraping complete!"})
 
+    except ScrapeCancelled as e:
+        scrape_control.state = ScrapeControl.IDLE
+        await log_queue.put({"type": "SCRAPE_CANCELLED", "message": f"[已取消] {e}"})
     except Exception as e:
+        scrape_control.state = ScrapeControl.IDLE
         err = traceback.format_exc()
-        await adapter._log(f"Error running scraper: {str(e)}\n{err}")
+        await log_queue.put({"type": "SCRAPE_DONE", "message": f"Error running scraper: {str(e)}\n{err}"})
 
 @app.get("/api/logs")
 async def sse_logs(request: Request):

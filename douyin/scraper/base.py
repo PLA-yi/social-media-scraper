@@ -32,7 +32,25 @@ class BaseScraper:
         self.videos: list = []
         self.all_comments: list = []
         self.download_videos = download_videos
+        self.control = getattr(server, 'control', None) if server else None
 
+
+    # ── 控制：暂停 / 取消 ────────────────────────────────────────────────────
+
+    async def _check_control(self):
+        """在每次循环开始前调用。暂停则等待，停止则抛出 ScrapeCancelled。"""
+        if not self.control:
+            return
+        if self.control.stop_event.is_set():
+            from server import ScrapeCancelled
+            raise ScrapeCancelled("用户取消了采集")
+        if not self.control.pause_event.is_set():
+            await self._log("  [暂停中] 等待恢复...")
+            await self.control.pause_event.wait()
+            if self.control.stop_event.is_set():
+                from server import ScrapeCancelled
+                raise ScrapeCancelled("用户取消了采集")
+            await self._log("  [已恢复]")
 
     # ── Logging ───────────────────────────────────────────────────────────────
 
@@ -196,6 +214,7 @@ class BaseScraper:
         no_new_rounds = 0
 
         for _ in range(60):
+            await self._check_control()
             if len(comments) >= COMMENT_COUNT:
                 break
 

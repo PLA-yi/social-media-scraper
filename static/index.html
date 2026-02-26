@@ -58,7 +58,15 @@
                     </button>
                 </nav>
             </div>
-            <span class="text-sm font-medium px-3 py-1 bg-blue-100 text-blue-700 rounded-full">系统运行中</span>
+            <span class="text-sm font-medium px-3 py-1 rounded-full transition-colors"
+                :class="{
+                    'bg-blue-100 text-blue-700':   scrapeStatus === 'idle',
+                    'bg-green-100 text-green-700':  scrapeStatus === 'running',
+                    'bg-orange-100 text-orange-700': scrapeStatus === 'paused',
+                    'bg-gray-100 text-gray-500':    scrapeStatus === 'stopped'
+                }">
+                {{ scrapeStatus === 'idle' ? '系统运行中' : scrapeStatus === 'running' ? '采集中...' : scrapeStatus === 'paused' ? '已暂停' : '已停止' }}
+            </span>
         </header>
 
         <!-- Page 1: Scraper Control -->
@@ -95,14 +103,82 @@
                         <label class="block text-sm font-semibold text-gray-700 mb-1.5">采集数量</label>
                         <input v-model.number="form.count" type="number" min="1" placeholder="默认 20" class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm">
                     </div>
+
+                    <div v-if="['douyin', 'tiktok'].includes(form.platform) && form.mode === 'keyword'">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">排序方式</label>
+                        <select v-model="form.sort_by" class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm">
+                            <option value="0">正常推荐</option>
+                            <option value="1">最新发布</option>
+                            <option value="2">最热 / 最多点赞</option>
+                        </select>
+                    </div>
+
+                    <div v-if="['douyin', 'tiktok'].includes(form.platform) && form.mode === 'keyword' && form.sort_by === '1'">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">时间限制 (小时)</label>
+                        <input v-model.number="form.time_filter" type="number" min="0" placeholder="默认 0 (不限制，如 3 表示 3小时内)" class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm">
+                        <p class="text-xs text-gray-400 mt-1">仅采集指定小时数以内更新的视频。若为0则不限制。</p>
+                    </div>
+
+                    <!-- 爬取模式选择（仅抖音/TikTok 关键词模式显示） -->
+                    <div v-if="['douyin', 'tiktok'].includes(form.platform) && form.mode === 'keyword'">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">爬取模式</label>
+                        <div class="flex gap-2">
+                            <button
+                                @click="form.scrape_mode = 'safe'"
+                                :class="form.scrape_mode === 'safe'
+                                    ? 'bg-blue-600 text-white border-blue-600'
+                                    : 'bg-white text-gray-600 border-gray-200 hover:border-blue-400'"
+                                class="flex-1 py-2 rounded-xl text-sm font-semibold border transition-all">
+                                安全爬取
+                            </button>
+                            <button
+                                @click="form.scrape_mode = 'fast'"
+                                :class="form.scrape_mode === 'fast'
+                                    ? 'bg-amber-500 text-white border-amber-500'
+                                    : 'bg-white text-gray-600 border-gray-200 hover:border-amber-400'"
+                                class="flex-1 py-2 rounded-xl text-sm font-semibold border transition-all">
+                                快速爬取
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1">快速模式：浏览器采集视频列表 + 10路并发同时拉取评论，速度约为安全模式的 10 倍。</p>
+                    </div>
+
+                    <div v-if="['douyin','tiktok','youtube'].includes(form.platform)" class="flex items-center gap-3 px-1">
+                        <input id="download-videos-toggle" v-model="form.download_videos" type="checkbox" class="w-4 h-4 rounded accent-blue-600 cursor-pointer flex-shrink-0">
+                        <label for="download-videos-toggle" class="text-sm font-semibold text-gray-700 cursor-pointer select-none">同时下载视频文件</label>
+                    </div>
                 </div>
 
-                <button @click="startScrape" class="w-full bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-700 active:bg-blue-800 transition-colors font-semibold shadow-md mt-2 flex justify-center items-center gap-2">
+                <button @click="startScrape" :disabled="isScraping" class="w-full bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold shadow-md mt-2 flex justify-center items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
                     </svg>
                     开始采集
                 </button>
+
+                <!-- 暂停/停止控制按钮（仅采集中显示） -->
+                <div v-if="isScraping && ['douyin', 'tiktok'].includes(form.platform) && form.mode === 'keyword'" class="flex gap-2">
+                    <button @click="pauseScrape"
+                        :class="scrapeStatus === 'paused'
+                            ? 'bg-green-500 hover:bg-green-600 text-white'
+                            : 'bg-orange-400 hover:bg-orange-500 text-white'"
+                        class="flex-1 py-2.5 rounded-xl font-semibold text-sm transition-colors flex items-center justify-center gap-1.5">
+                        <svg v-if="scrapeStatus !== 'paused'" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20" class="w-4 h-4">
+                            <path d="M5.75 3a.75.75 0 0 0-.75.75v12.5c0 .414.336.75.75.75h1.5a.75.75 0 0 0 .75-.75V3.75A.75.75 0 0 0 7.25 3h-1.5ZM12.75 3a.75.75 0 0 0-.75.75v12.5c0 .414.336.75.75.75h1.5a.75.75 0 0 0 .75-.75V3.75a.75.75 0 0 0-.75-.75h-1.5Z" />
+                        </svg>
+                        <svg v-else xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20" class="w-4 h-4">
+                            <path d="M6.3 2.84A1.5 1.5 0 0 0 4 4.11v11.78a1.5 1.5 0 0 0 2.3 1.27l9.344-5.891a1.5 1.5 0 0 0 0-2.538L6.3 2.841Z" />
+                        </svg>
+                        {{ scrapeStatus === 'paused' ? '继续' : '暂停' }}
+                    </button>
+                    <button @click="stopScrape"
+                        class="flex-1 py-2.5 rounded-xl font-semibold text-sm bg-red-500 hover:bg-red-600 text-white transition-colors flex items-center justify-center gap-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20" class="w-4 h-4">
+                            <path d="M5.25 3A2.25 2.25 0 0 0 3 5.25v9.5A2.25 2.25 0 0 0 5.25 17h9.5A2.25 2.25 0 0 0 17 14.75v-9.5A2.25 2.25 0 0 0 14.75 3h-9.5Z" />
+                        </svg>
+                        停止
+                    </button>
+                </div>
 
                 <div class="mt-auto pt-6 border-t border-gray-200">
                     <div class="flex items-center gap-2 mb-2">
@@ -376,17 +452,29 @@
     </div>
 
     <script>
-        const { createApp, ref, reactive, onMounted, nextTick } = Vue;
+        const { createApp, ref, reactive, watch, onMounted, nextTick } = Vue;
 
         createApp({
             setup() {
                 const currentPage = ref('scraper');
                 const logs = ref([]);
+                const scrapeStatus = ref('idle');   // idle / running / paused / stopped
+                const isScraping = ref(false);
                 const form = ref({
                     platform: 'douyin',
                     mode: 'keyword',
                     target: '',
-                    count: 20
+                    count: 20,
+                    download_videos: false,
+                    sort_by: '0',
+                    time_filter: 0,
+                    scrape_mode: 'safe'
+                });
+
+                watch(() => form.value.platform, (p) => {
+                    if (!['douyin', 'tiktok', 'youtube'].includes(p)) {
+                        form.value.download_videos = false;
+                    }
                 });
 
                 // AI Chat State
@@ -558,6 +646,7 @@
                 };
 
                 const startScrape = async () => {
+                    if (isScraping.value) return;
                     await fetch('/api/scrape', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -569,13 +658,40 @@
                     await fetch('/api/resume', { method: 'POST' });
                 };
 
+                const pauseScrape = async () => {
+                    await fetch('/api/pause', { method: 'POST' });
+                };
+
+                const stopScrape = async () => {
+                    await fetch('/api/stop', { method: 'POST' });
+                };
+
                 onMounted(() => {
                     loadDataFiles();
 
                     const evtSource = new EventSource("/api/logs");
                     evtSource.onmessage = function(event) {
                         const data = JSON.parse(event.data);
-                        logs.value.push(data.message);
+                        if (data.message) logs.value.push(data.message);
+
+                        // Update scrape status from typed events
+                        if (data.type === 'SCRAPE_STARTED') {
+                            isScraping.value = true;
+                            scrapeStatus.value = 'running';
+                        } else if (data.type === 'SCRAPE_DONE') {
+                            isScraping.value = false;
+                            scrapeStatus.value = 'idle';
+                        } else if (data.type === 'SCRAPE_CANCELLED') {
+                            isScraping.value = false;
+                            scrapeStatus.value = 'idle';
+                        } else if (data.type === 'SCRAPE_PAUSED') {
+                            scrapeStatus.value = 'paused';
+                        } else if (data.type === 'SCRAPE_RESUMED') {
+                            scrapeStatus.value = 'running';
+                        } else if (data.type === 'SCRAPE_STOPPING') {
+                            scrapeStatus.value = 'stopped';
+                        }
+
                         nextTick(() => {
                             const container = document.getElementById("log-container");
                             if (container) {
@@ -591,6 +707,8 @@
                 return {
                     currentPage,
                     logs,
+                    scrapeStatus,
+                    isScraping,
                     form,
                     dataFiles,
                     folderMeta,
@@ -611,6 +729,8 @@
                     sendChatMessage,
                     startScrape,
                     resumeScrape,
+                    pauseScrape,
+                    stopScrape,
                     cleanEmptyFolders
                 };
             }

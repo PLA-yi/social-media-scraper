@@ -32,7 +32,25 @@ class BaseScraper:
         self.videos: list = []
         self.all_comments: list = []
         self.download_videos = download_videos
+        self.control = getattr(server, 'control', None) if server else None
 
+
+    # ── 控制：暂停 / 取消 ────────────────────────────────────────────────────
+
+    async def _check_control(self):
+        """在每次循环开始前调用。暂停则等待，停止则抛出 ScrapeCancelled。"""
+        if not self.control:
+            return
+        if self.control.stop_event.is_set():
+            from server import ScrapeCancelled
+            raise ScrapeCancelled("用户取消了采集")
+        if not self.control.pause_event.is_set():
+            await self._log("  [暂停中] 等待恢复...")
+            await self.control.pause_event.wait()
+            if self.control.stop_event.is_set():
+                from server import ScrapeCancelled
+                raise ScrapeCancelled("用户取消了采集")
+            await self._log("  [已恢复]")
 
     # ── Logging ───────────────────────────────────────────────────────────────
 
@@ -155,10 +173,11 @@ class BaseScraper:
 
     # ── 评论采集 ──────────────────────────────────────────────────────────────
 
-    async def _detect_comment_selector(self, page) -> str:
+    async def _detect_comment_selector(self, page, debug: bool = False) -> str:
         """
         探测当前页面实际使用的评论条目选择器。
-        返回匹配到的选择器字符串，找不到则返回空字符串，并打印调试信息。
+        返回匹配到的选择器字符串，找不到则返回空字符串。
+        debug=True 时才打印详细扫描信息（只在最后一轮失败时触发）。
         """
         candidates = [
             "[data-e2e='comment-item']",
@@ -174,31 +193,32 @@ class BaseScraper:
                 await self._log(f"  [选择器] 匹配到评论元素：{sel}  共 {len(els)} 条")
                 return sel
 
-        # 找不到时，打印页面上带有 data-e2e 属性的元素 & 有 comment 关键词的 class
-        await self._log("  [调试] 未匹配到评论元素，扫描页面中的 data-e2e 和 comment class：")
-        debug = await page.evaluate("""
-            () => {
-                const e2e = Array.from(document.querySelectorAll('[data-e2e]'))
-                    .map(el => el.getAttribute('data-e2e'))
-                    .filter((v, i, a) => a.indexOf(v) === i)
-                    .filter(v => v && v.toLowerCase().includes('comment'));
-                const cls = Array.from(document.querySelectorAll('[class]'))
-                    .map(el => el.className)
-                    .join(' ')
-                    .split(/\s+/)
-                    .filter((v, i, a) => a.indexOf(v) === i)
-                    .filter(v => v.toLowerCase().includes('comment'))
-                    .slice(0, 20);
-                return { e2e, cls };
-            }
-        """)
-        await self._log(f"    data-e2e (含 comment)：{debug['e2e']}")
-        await self._log(f"    class (含 comment)：{debug['cls']}")
+        if debug:
+            await self._log("  [调试] 未匹配到评论元素，扫描页面中的 data-e2e 和 comment class：")
+            info = await page.evaluate("""
+                () => {
+                    const e2e = Array.from(document.querySelectorAll('[data-e2e]'))
+                        .map(el => el.getAttribute('data-e2e'))
+                        .filter((v, i, a) => a.indexOf(v) === i)
+                        .filter(v => v && v.toLowerCase().includes('comment'));
+                    const cls = Array.from(document.querySelectorAll('[class]'))
+                        .map(el => el.className)
+                        .join(' ')
+                        .split(/\\s+/)
+                        .filter((v, i, a) => a.indexOf(v) === i)
+                        .filter(v => v.toLowerCase().includes('comment'))
+                        .slice(0, 20);
+                    return { e2e, cls };
+                }
+            """)
+            await self._log(f"    data-e2e (含 comment)：{info['e2e']}")
+            await self._log(f"    class (含 comment)：{info['cls']}")
         return ""
 
     async def _try_open_comments(self, page):
         """尝试自动点击评论展开按钮（TikTok 某些页面需要）。"""
         open_selectors = [
+            "[data-e2e='comments']",           # 搜索结果页视频的评论图标
             "[data-e2e='comment-icon']",
             "[data-e2e='browse-comment-icon']",
             "[aria-label*='comment' i]",
@@ -211,7 +231,7 @@ class BaseScraper:
                 el = await page.query_selector(sel)
                 if el and await el.is_visible():
                     await el.click()
-                    await page.wait_for_timeout(2000)
+                    await page.wait_for_timeout(3000)
                     return
             except Exception:
                 pass
@@ -229,15 +249,17 @@ class BaseScraper:
 
         await self._wait_if_captcha(page)
 
-        # 尝试自动点击评论按钮（部分页面需要）
+        # 尝试自动点击评论按钮（部分页面需要），每 2 轮重试一次
         await self._try_open_comments(page)
 
-        # 循环等待评论区出现，最多 20 秒
+        # 循环等待评论区出现，最多 20 秒；每 2 轮重新尝试点击一次
         comment_sel = ""
-        for _ in range(10):
-            comment_sel = await self._detect_comment_selector(page)
+        for i in range(10):
+            comment_sel = await self._detect_comment_selector(page, debug=(i == 9))
             if comment_sel:
                 break
+            if i % 2 == 1:
+                await self._try_open_comments(page)
             await page.wait_for_timeout(2000)
         if not comment_sel:
             await self._log("  [跳过] 未能识别评论元素结构，跳过此视频")
@@ -267,6 +289,7 @@ class BaseScraper:
         no_new_rounds = 0
 
         for _ in range(60):
+            await self._check_control()
             if len(comments) >= COMMENT_COUNT:
                 break
 
